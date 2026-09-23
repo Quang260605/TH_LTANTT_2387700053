@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import os
 import platform
 import re
@@ -10,10 +10,11 @@ from datetime import datetime
 LOG_FILE = "gitsecure.log"
 
 SENSITIVE_PATTERNS = [
-    r"password\s*=\s*['\"][^'\"]{4,}['\"]",
-    r"secret\s*=\s*['\"][A-Za-z0-9_\-]{8,}['\"]",
-    r"token\s*=\s*['\"][A-Za-z0-9]{10,}['\"]",
     r"apikey\s*=\s*['\"][A-Za-z0-9_\-]{16,}['\"]",
+    r"secret\s*=\s*['\"][A-Za-z0-9_\-]{8,}['\"]",
+    r"password\s*=\s*['\"][^'\"]{4,}['\"]",
+    r"token\s*=\s*['\"][A-Za-z0-9-]{10,}['\"]",
+    r"(AKIA|ASIA)[A-Z0-9]{16}",
 ]
 
 
@@ -44,6 +45,17 @@ def check_permissions(file_path):
     return None
 
 
+def run_bandit():
+    try:
+        result = subprocess.run(["bandit", "-r", "."], capture_output=True, text=True)
+        if "SEVERITY: High" in result.stdout:
+            log("Bandit: High severity issues found.")
+            return "Bandit: High severity issues found."
+    except FileNotFoundError:
+        return None  # If bandit is not installed or available, skip or return warning
+    return None
+
+
 def main():
     findings = []
     try:
@@ -52,7 +64,7 @@ def main():
             stderr=subprocess.DEVNULL,
             text=True,
         ).splitlines()
-    except subprocess.CalledProcessError:
+    except Exception:
         files = []
 
     for file in files:
@@ -66,6 +78,10 @@ def main():
         perms = check_permissions(file)
         if perms:
             findings.append(perms)
+
+    bandit_result = run_bandit()
+    if bandit_result:
+        findings.append(bandit_result)
 
     if findings:
         print("\nCOMMIT BLOCKED by GitSecure:")
